@@ -1,0 +1,74 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+
+/*
+ * PrivateChat sunset theme. One gradient (violet -> magenta -> orange) carries the brand;
+ * everything else stays neutral so chat content stays readable.
+ * Later screens reuse: bg-brand (CTA / headers), text-brand (links), bg-bubble-mine (sent messages).
+ */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-violet: #7c3aed;
+  --color-brand-magenta: #c026d3;
+  --color-brand-orange: #f97316;
+  --color-brand-ink: #1e1b4b;
+  --color-surface: #f7f4fb;
+  --color-bubble-mine: #fbe7f6;
+  --color-bubble-theirs: #f3f1f8;
+
+  --shadow-card: 0 24px 60px -24px rgb(124 58 237 / 0.35), 0 2px 8px -2px rgb(30 27 75 / 0.08);
+  --shadow-cta: 0 12px 28px -10px rgb(192 38 211 / 0.55);
+  --animate-rise: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* The brand gradient. End stops are darkened a little so white text keeps readable contrast. */
+@utility bg-brand {
+  background-image: linear-gradient(95deg, #6d28d9 0%, #c026d3 52%, #ea580c 100%);
+}
+
+@utility bg-brand-soft {
+  background-image: linear-gradient(95deg, rgb(124 58 237 / 0.1), rgb(192 38 211 / 0.1) 55%, rgb(249 115 22 / 0.12));
+}
+
+/* Dusk sky behind the login brand panel and the mobile login background. */
+@utility bg-sunset {
+  background-image: linear-gradient(
+    180deg,
+    #1e1b4b 0%,
+    #3b1d7a 28%,
+    #7c2d9e 52%,
+    #c2417c 72%,
+    #f97316 100%
+  );
+}
+
+@utility text-brand {
+  background-image: linear-gradient(95deg, #6d28d9, #c026d3 55%, #ea580c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
