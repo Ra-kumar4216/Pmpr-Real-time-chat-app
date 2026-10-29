@@ -10,7 +10,7 @@ const MAX_SDP = 100_000
 export function iceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
   const urls = import.meta.env.VITE_TURN_URLS
-  if (urls) {
+  if (urls && relayConfigured()) {
     servers.push({
       urls: urls.split(',').map((u) => u.trim()).filter(Boolean),
       username: import.meta.env.VITE_TURN_USERNAME,
@@ -18,6 +18,11 @@ export function iceServers(): RTCIceServer[] {
     })
   }
   return servers
+}
+
+/** True when a TURN relay was configured at build time (VITE_TURN_*). */
+export function relayConfigured(): boolean {
+  return Boolean(import.meta.env.VITE_TURN_URLS && import.meta.env.VITE_TURN_USERNAME && import.meta.env.VITE_TURN_CREDENTIAL)
 }
 
 export function callsSupported(): boolean {
