@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { useLiveHub } from '../live/LiveHub'
 import { showNotification } from '../lib/notify'
 import type { Person } from '../lib/types'
-import { cleanCandidate, cleanSdp, callsSupported, CONNECT_TIMEOUT_MS, DISCONNECT_GRACE_MS, iceServers, mediaErrorMessage, RING_TIMEOUT_MS } from './rtc'
+import { cleanCandidate, cleanSdp, callsSupported, CONNECT_TIMEOUT_MS, DISCONNECT_GRACE_MS, iceServers, mediaErrorMessage, relayConfigured, RING_TIMEOUT_MS } from './rtc'
 import { startRingtone, stopRingtone } from './ringtone'
 
 export type CallPhase = 'idle' | 'calling' | 'incoming' | 'connecting' | 'active'
@@ -19,9 +19,11 @@ export interface CallState {
   cameraOff: boolean
   localStream: MediaStream | null
   remoteStream: MediaStream | null
+  /** The browser's own word for how the network path is doing (checking, connected, failed...). Shown while connecting. */
+  network: string | null
 }
 
-const IDLE: CallState = { phase: 'idle', callId: null, partner: null, video: false, startedAt: null, muted: false, cameraOff: false, localStream: null, remoteStream: null }
+const IDLE: CallState = { phase: 'idle', callId: null, partner: null, video: false, startedAt: null, muted: false, cameraOff: false, localStream: null, remoteStream: null, network: null }
 
 type EndReason = 'hangup' | 'cancel' | 'declined' | 'busy' | 'timeout'
 
@@ -84,6 +86,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         pcRef.current.onicecandidate = null
         pcRef.current.ontrack = null
         pcRef.current.onconnectionstatechange = null
+        pcRef.current.oniceconnectionstatechange = null
         pcRef.current.close()
         pcRef.current = null
       }
@@ -122,6 +125,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
         const remote = e.streams[0] ?? new MediaStream([e.track])
         setCall((c) => (c.callId === callId ? { ...c, remoteStream: remote } : c))
       }
+      pc.oniceconnectionstatechange = () => {
+        if (callRef.current.callId === callId) setCall((c) => ({ ...c, network: pc.iceConnectionState }))
+      }
       pc.onconnectionstatechange = () => {
         if (callRef.current.callId !== callId) return
         window.clearTimeout(dropTimer.current)
@@ -129,7 +135,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
           window.clearTimeout(connectTimer.current)
           setCall((c) => ({ ...c, phase: 'active', startedAt: c.startedAt ?? Date.now() }))
         } else if (pc.connectionState === 'failed') {
-          finish('The call could not connect. Your network may block direct calls.', 'hangup')
+          finish(
+            relayConfigured()
+              ? 'The call could not connect, even through the relay server. Check both internet connections.'
+              : 'The call could not connect. Your networks may block direct calls: a relay (TURN) server is not set up.',
+            'hangup',
+          )
         } else if (pc.connectionState === 'disconnected') {
           dropTimer.current = window.setTimeout(() => finish('The call was dropped.', 'hangup'), DISCONNECT_GRACE_MS)
         }
@@ -146,7 +157,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(connectTimer.current)
       connectTimer.current = window.setTimeout(() => {
         if (callRef.current.callId === callId && callRef.current.phase === 'connecting') {
-          finish('The call could not connect. Your networks may block direct calls (a relay server is needed).', 'hangup')
+          finish(
+            relayConfigured()
+              ? 'The call could not connect, even through the relay server. Check both internet connections.'
+              : 'The call could not connect. Your networks may block direct calls: a relay (TURN) server is not set up.',
+            'hangup',
+          )
         }
       }, CONNECT_TIMEOUT_MS)
     },
