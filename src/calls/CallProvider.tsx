@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { useLiveHub } from '../live/LiveHub'
 import { showNotification } from '../lib/notify'
 import type { Person } from '../lib/types'
-import { cleanCandidate, cleanSdp, callsSupported, DISCONNECT_GRACE_MS, iceServers, mediaErrorMessage, RING_TIMEOUT_MS } from './rtc'
+import { cleanCandidate, cleanSdp, callsSupported, CONNECT_TIMEOUT_MS, DISCONNECT_GRACE_MS, iceServers, mediaErrorMessage, RING_TIMEOUT_MS } from './rtc'
 import { startRingtone, stopRingtone } from './ringtone'
 
 export type CallPhase = 'idle' | 'calling' | 'incoming' | 'connecting' | 'active'
@@ -58,6 +58,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const pendingIce = useRef<RTCIceCandidateInit[]>([])
   const ringTimer = useRef<number>(undefined)
   const dropTimer = useRef<number>(undefined)
+  const connectTimer = useRef<number>(undefined)
 
   const hubRef = useRef(hub)
   hubRef.current = hub
@@ -77,6 +78,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       if (tell && c.partner && c.callId) hubRef.current.send(c.partner.id, 'call-end', { callId: c.callId, reason: tell })
       window.clearTimeout(ringTimer.current)
       window.clearTimeout(dropTimer.current)
+      window.clearTimeout(connectTimer.current)
       stopRingtone()
       if (pcRef.current) {
         pcRef.current.onicecandidate = null
@@ -124,6 +126,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         if (callRef.current.callId !== callId) return
         window.clearTimeout(dropTimer.current)
         if (pc.connectionState === 'connected') {
+          window.clearTimeout(connectTimer.current)
           setCall((c) => ({ ...c, phase: 'active', startedAt: c.startedAt ?? Date.now() }))
         } else if (pc.connectionState === 'failed') {
           finish('The call could not connect. Your network may block direct calls.', 'hangup')
@@ -135,6 +138,19 @@ export function CallProvider({ children }: { children: ReactNode }) {
       return pc
     },
     [finish, setCall],
+  )
+
+  /** The answer is in but no media path yet: give up with a clear reason instead of hanging on "Connecting…". */
+  const armConnectTimer = useCallback(
+    (callId: string) => {
+      window.clearTimeout(connectTimer.current)
+      connectTimer.current = window.setTimeout(() => {
+        if (callRef.current.callId === callId && callRef.current.phase === 'connecting') {
+          finish('The call could not connect. Your networks may block direct calls (a relay server is needed).', 'hangup')
+        }
+      }, CONNECT_TIMEOUT_MS)
+    },
+    [finish],
   )
 
   const blockedReason = useCallback(
@@ -194,6 +210,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     window.clearTimeout(ringTimer.current)
     stopRingtone()
     setCall((x) => ({ ...x, phase: 'connecting' }))
+    armConnectTimer(callId)
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true, video })
@@ -232,7 +249,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     } catch {
       finish('Could not connect the call.', 'hangup')
     }
-  }, [createPeer, finish, flushIce, setCall, toast])
+  }, [armConnectTimer, createPeer, finish, flushIce, setCall, toast])
 
   const decline = useCallback(() => finish(null, 'declined'), [finish])
 
@@ -291,6 +308,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
           if (c.phase !== 'calling' || !sdp || !pcRef.current) return
           window.clearTimeout(ringTimer.current)
           setCall((x) => ({ ...x, phase: 'connecting' }))
+          armConnectTimer(callId)
           pcRef.current
             .setRemoteDescription({ type: 'answer', sdp })
             .then(flushIce)
@@ -308,7 +326,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
           } else finish('Call ended.')
         }
       }),
-    [hub, finish, flushIce, setCall],
+    [hub, finish, flushIce, setCall, armConnectTimer],
   )
 
   // Closing the tab mid-call should not leave the other person ringing.
