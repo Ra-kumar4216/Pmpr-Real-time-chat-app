@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LogOut,
@@ -12,6 +12,7 @@ import { useRequiredProfile } from "../auth/ProfileContext";
 import { CallOverlay } from "../calls/CallOverlay";
 import { CallProvider } from "../calls/CallProvider";
 import { ChatDataProvider, useChatData } from "../chat/ChatDataContext";
+import { showNotification } from "../lib/notify";
 import { LiveHubProvider } from "../live/LiveHub";
 import { Avatar } from "./Avatar";
 import { Horizon } from "./AuthLayout";
@@ -33,6 +34,34 @@ function UnreadBadge({ count }: { count: number }) {
       {count > 99 ? "99+" : count}
     </span>
   );
+}
+
+/** System notification for a new message while the app is in the background. Renders nothing. */
+function MessageNotifier() {
+  const me = useRequiredProfile();
+  const chat = useChatData();
+  const { subscribe, getPerson } = chat;
+  const done = useRef(new Set<string>());
+  useEffect(
+    () =>
+      subscribe((e) => {
+        const m = e.message;
+        if (
+          e.type !== "INSERT" ||
+          m.receiver_id !== me.id ||
+          done.current.has(m.id)
+        )
+          return;
+        done.current.add(m.id);
+        void showNotification(
+          getPerson(m.sender_id)?.display_name ?? "New message",
+          m.body?.trim() || "Sent you a photo",
+          `msg-${m.sender_id}`,
+        );
+      }),
+    [subscribe, getPerson, me.id],
+  );
+  return null;
 }
 
 function Shell() {
@@ -153,6 +182,7 @@ export default function AppShell() {
       <LiveHubProvider>
         <CallProvider>
           <Shell />
+          <MessageNotifier />
           <CallOverlay />
         </CallProvider>
       </LiveHubProvider>

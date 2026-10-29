@@ -93,6 +93,7 @@ function OngoingCall() {
     return () => window.clearInterval(t);
   }, [call.phase]);
 
+  const hasCamera = (call.localStream?.getVideoTracks().length ?? 0) > 0;
   const name = call.partner?.display_name ?? "";
   const status =
     call.phase === "calling"
@@ -156,7 +157,7 @@ function OngoingCall() {
           </div>
         )}
 
-        {call.video && call.localStream && (
+        {call.video && hasCamera && (
           <video
             ref={localVideo}
             muted
@@ -184,7 +185,7 @@ function OngoingCall() {
             <Mic aria-hidden className="size-6" />
           )}
         </button>
-        {call.video && (
+        {call.video && hasCamera && (
           <button
             type="button"
             onClick={toggleCamera}
