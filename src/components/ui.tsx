@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { passwordStrength } from "../auth/validation";
-import logoIcon from "../assets/logo-icon.png";
+const logoIcon = new URL("../assets/logo-icon.png", import.meta.url).href;
 
 export function Spinner({ className = "size-4" }: { className?: string }) {
   return <Loader2 aria-hidden className={`${className} animate-spin`} />;
